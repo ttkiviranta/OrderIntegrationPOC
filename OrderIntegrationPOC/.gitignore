@@ -1,0 +1,91 @@
+# Azure Functions
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.cache
+*.cafex
+*.cs.bak
+
+# Local settings (contains sensitive data)
+local.settings.json
+
+# Dependencies
+node_modules/
+
+# Azure Storage Emulator
+*.ldf
+*.mdf
+
+# Application Insights
+ApplicationInsights.config
+
+# Publish artifacts
+publish/
+PublishProfiles/
+
+# Visual Studio cache/options
+.vs/
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Rider cache
+.idea/
+
+# Python (if used)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test results
+TestResults/
+*.trx
+
+# npm
+package-lock.json
+yarn.lock
+
+# Azure Storage Emulator
+*.cer
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS-specific
+Thumbs.db
+.DS_Store
+
+# Build output
+dist/
+build/
+
+# Azure Functions
+.azure/
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# Temporary files
+*.tmp
+*.bak
+~$*
+
+# Azure resources
+*.json.bak

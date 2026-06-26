@@ -1,0 +1,169 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Check_Scope_Failed": {
+        "actions": {
+          "Log_Error_to_Application_Insights": {
+            "inputs": {
+              "body": {
+                "message": "Error processing order from Service Bus",
+                "severityLevel": "Error",
+                "properties": {
+                  "OrderId": "@{body('Parse_JSON')?['orderId']}",
+                  "Error": "@{string(body('Compose'))}",
+                  "Timestamp": "@utcNow()"
+                }
+              },
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['applicationinsights']['connectionId']"
+                }
+              },
+              "method": "get",
+              "path": "/api/logs"
+            },
+            "type": "ApiConnection"
+          }
+        },
+        "runAfter": {
+          "Scope_Process_Order": [
+            "FAILED",
+            "TIMEDOUT"
+          ]
+        },
+        "type": "Scope"
+      },
+      "Parse_JSON": {
+        "inputs": {
+          "content": "@string(base64ToString(triggerBody()?['ContentData']))",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "orderId": {
+                "type": "string"
+              },
+              "customerId": {
+                "type": "string"
+              },
+              "total": {
+                "type": "number"
+              },
+              "description": {
+                "type": "string"
+              },
+              "orderDate": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "orderId",
+              "customerId"
+            ]
+          }
+        },
+        "runAfter": {},
+        "type": "ParseJson"
+      },
+      "Scope_Process_Order": {
+        "actions": {
+          "Call_ProcessOrder_Function": {
+            "inputs": {
+              "body": "@body('Parse_JSON')",
+              "method": "POST",
+              "uri": "@parameters('FunctionProcessOrderUri')"
+            },
+            "runAfter": {},
+            "type": "Http"
+          },
+          "Log_Success_to_Application_Insights": {
+            "inputs": {
+              "body": {
+                "message": "Order processed successfully",
+                "severityLevel": "Information",
+                "properties": {
+                  "OrderId": "@{body('Parse_JSON')?['orderId']}",
+                  "CustomerId": "@{body('Parse_JSON')?['customerId']}",
+                  "Total": "@{body('Parse_JSON')?['total']}",
+                  "Timestamp": "@utcNow()",
+                  "FunctionResponse": "@{body('Call_ProcessOrder_Function')}"
+                }
+              },
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['applicationinsights']['connectionId']"
+                }
+              },
+              "method": "get",
+              "path": "/api/logs"
+            },
+            "runAfter": {
+              "Call_ProcessOrder_Function": [
+                "Succeeded"
+              ]
+            },
+            "type": "ApiConnection"
+          }
+        },
+        "runAfter": {
+          "Parse_JSON": [
+            "Succeeded"
+          ]
+        },
+        "type": "Scope"
+      }
+    },
+    "contentVersion": "1.0.0.0",
+    "outputs": {},
+    "parameters": {
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      },
+      "FunctionProcessOrderUri": {
+        "defaultValue": "https://[YourFunctionAppName].azurewebsites.net/api/orders/process?code=[FunctionCode]",
+        "type": "String"
+      }
+    },
+    "triggers": {
+      "Service_Bus_Trigger": {
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['servicebus']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/@{encodeURIComponent('orders-incoming')}/messages/head",
+          "queries": {
+            "queueType": "main"
+          }
+        },
+        "recurrence": {
+          "frequency": "Second",
+          "interval": 5
+        },
+        "type": "ApiConnection"
+      }
+    }
+  },
+  "metadata": {
+    "description": "Logic App workflow for processing orders from Service Bus queue. Receives messages, validates them, calls Azure Function for processing, and logs results to Application Insights.",
+    "operationName": "OrderProcessingWorkflow",
+    "version": "1.0"
+  },
+  "parameters": {
+    "ServiceBusConnectionString": {
+      "description": "Service Bus connection string",
+      "type": "string"
+    },
+    "ApplicationInsightsKey": {
+      "description": "Application Insights instrumentation key",
+      "type": "string"
+    },
+    "FunctionAppCode": {
+      "description": "Azure Function authorization code",
+      "type": "string"
+    }
+  }
+}

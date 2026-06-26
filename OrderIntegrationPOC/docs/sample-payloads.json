@@ -1,0 +1,72 @@
+{
+  "description": "Order Payloads for Testing the OrderIntegrationPOC",
+  "examples": [
+    {
+      "name": "Valid Order - Standard",
+      "payload": {
+        "orderId": "ORD-20241513-001",
+        "customerId": "CUST-987",
+        "total": 149.90,
+        "description": "Sample Electronics Order",
+        "orderDate": "2024-01-15T10:30:00Z"
+      }
+    },
+    {
+      "name": "Valid Order - High Value",
+      "payload": {
+        "orderId": "ORD-20241513-002",
+        "customerId": "CUST-654",
+        "total": 5999.99,
+        "description": "Enterprise Software License",
+        "orderDate": "2024-01-15T11:15:00Z"
+      }
+    },
+    {
+      "name": "Valid Order - Minimal",
+      "payload": {
+        "orderId": "ORD-20241513-003",
+        "customerId": "CUST-321"
+      }
+    },
+    {
+      "name": "Invalid Order - Missing OrderId",
+      "payload": {
+        "customerId": "CUST-999",
+        "total": 100.00
+      },
+      "expectedError": "Field 'orderId' is required and cannot be empty."
+    },
+    {
+      "name": "Invalid Order - Missing CustomerId",
+      "payload": {
+        "orderId": "ORD-20241513-004",
+        "total": 100.00
+      },
+      "expectedError": "Field 'customerId' is required and cannot be empty."
+    },
+    {
+      "name": "Invalid Order - Zero Total",
+      "payload": {
+        "orderId": "ORD-20241513-005",
+        "customerId": "CUST-777",
+        "total": 0
+      },
+      "expectedError": "Field 'total' must be greater than zero."
+    },
+    {
+      "name": "Invalid Order - Negative Total",
+      "payload": {
+        "orderId": "ORD-20241513-006",
+        "customerId": "CUST-888",
+        "total": -50.00
+      },
+      "expectedError": "Field 'total' must be greater than zero."
+    }
+  ],
+  "testingNotes": [
+    "Use the 'Valid Order' examples to test successful processing (expect 200 OK response)",
+    "Use the 'Invalid Order' examples to test error handling (expect 400 Bad Request response)",
+    "Each example includes the field structure expected by the Azure Service Bus message and Logic App",
+    "The payloads can be sent directly via HTTP POST to the ProcessOrder function endpoint"
+  ]
+}
