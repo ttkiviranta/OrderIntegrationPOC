@@ -11,6 +11,9 @@ var builder = FunctionsApplication.CreateBuilder(args);
 // Configure Functions Web Application
 builder.ConfigureFunctionsWebApplication();
 
+// Add Functions Worker defaults (required for .NET 8 isolated model)
+builder.Services.AddFunctionsWorkerDefaults();
+
 // Add Application Insights for telemetry and monitoring
 builder.Services
     .AddApplicationInsightsTelemetryWorkerService()
