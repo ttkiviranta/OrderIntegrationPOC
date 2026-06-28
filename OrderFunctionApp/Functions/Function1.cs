@@ -31,7 +31,6 @@ namespace OrderFunctionApp.Functions
             _logger.LogInformation("Function1 was triggered at {Timestamp}", DateTime.UtcNow);
 
             var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json");
 
             var responseData = new
             {
