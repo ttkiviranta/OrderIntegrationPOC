@@ -331,7 +331,71 @@ GitHub: [@ttkiviranta](https://github.com/ttkiviranta)
 
 ---
 
-## 📝 License
+## ⚠️ Known Issues: Swagger/OpenAPI Support
+
+### Issue: Swagger UI Not Available
+
+**Status**: Acknowledged limitation of the .NET 8 Isolated Worker runtime
+
+**Description**:
+Swagger UI documentation is not available in the current implementation due to compatibility issues with the .NET 8 Azure Functions Isolated Worker model.
+
+**Root Cause**:
+- Microsoft's `Microsoft.Azure.WebJobs.Extensions.OpenApi` package has limited/unstable support for .NET 8 Isolated Workers
+- Preview versions (e.g., v2.0.0-preview2) cause dependency registration errors during startup
+- Stable versions (e.g., v1.5.0) do not include the required types:
+  - `IOpenApiHttpTriggerContext`
+  - `OpenApiHttpTriggerContext`
+  - `IOpenApiTriggerFunction`
+  - `OpenApiTriggerFunction`
+- No official Microsoft solution exists yet for this specific runtime configuration
+
+**Workarounds**:
+
+1. **Use Postman (Recommended)**:
+   - Import the ReceiveOrder endpoint manually
+   - Test with JSON body samples provided in the [Testing-Guide.md](OrderIntegrationPOC/docs/Testing-Guide.md)
+
+2. **Use cURL or PowerShell**:
+   ```powershell
+   $body = @{
+       orderId = "TEST-001"
+       customerId = "CUST-001"
+       total = 99.99
+       description = "Test order"
+   } | ConvertTo-Json
+
+   Invoke-WebRequest -Uri "http://localhost:7071/api/orders" `
+     -Method POST `
+     -Headers @{"Content-Type"="application/json"} `
+     -Body $body
+   ```
+
+3. **Use VS Code REST Client Extension**:
+   - Install the "REST Client" extension
+   - Create a `.http` or `.rest` file with API requests
+   - Execute requests directly from the editor
+
+4. **Manual OpenAPI Specification**:
+   - Create a static `openapi.json` file
+   - Use third-party Swagger UI to render the specification
+   - See [API-Reference.md](OrderIntegrationPOC/docs/API-Reference.md) for endpoint details
+
+**What This Means**:
+- ✅ The API endpoints function correctly
+- ✅ All validation and processing works as expected
+- ✅ Can be deployed to Azure without issues
+- ❌ No automatic Swagger documentation UI
+- ❌ Manual testing required (Postman/cURL)
+
+**Future Resolution**:
+As Microsoft releases stable OpenAPI support for .NET 8 Isolated Workers, this issue will be resolved. Monitor the [Azure Functions roadmap](https://github.com/Azure/azure-functions-host) for updates.
+
+**References**:
+- [Azure Functions OpenAPI Extension](https://github.com/Azure/azure-functions-openapi-extension)
+- [.NET 8 Isolated Worker Limitations](https://learn.microsoft.com/en-us/azure/azure-functions/functions-dotnet-dependency-injection)
+
+---
 
 This Proof of Concept is provided as-is for educational and demonstration purposes.
 
