@@ -2,10 +2,12 @@ using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OrderFunctionApp.Data;
 using OrderFunctionApp.Functions;
 
 var builder = FunctionsApplication.CreateBuilder(args);
@@ -25,6 +27,27 @@ builder.Services
     .AddApplicationInsightsTelemetryWorkerService()
     .ConfigureFunctionsApplicationInsights();
 
+// Register DbContextFactory for Entity Framework Core (Azure Functions pattern)
+// DbContextFactory is used instead of AddDbContext because Azure Functions
+// requires creating new context instances per invocation
+builder.Services.AddDbContextFactory<OrderIntegrationContext>(options =>
+{
+    var connectionString = builder.Configuration["SqlConnectionString"];
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new InvalidOperationException("SqlConnectionString is not configured in settings");
+    }
+
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null);
+        sqlOptions.CommandTimeout(30);
+    });
+});
+
 // Register OrderProcessor for dependency injection
 builder.Services.AddScoped<OrderProcessor>();
 
@@ -39,5 +62,6 @@ builder.Services.AddLogging(configure =>
 });
 
 builder.Build().Run();
+
 
 
