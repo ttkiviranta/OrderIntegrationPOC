@@ -28,6 +28,9 @@ builder.Services
 // Register OrderProcessor for dependency injection
 builder.Services.AddScoped<OrderProcessor>();
 
+// Register ProcessOrderToSql for dependency injection
+builder.Services.AddScoped<ProcessOrderToSql>();
+
 // Configure logging
 builder.Services.AddLogging(configure =>
 {
@@ -36,6 +39,5 @@ builder.Services.AddLogging(configure =>
 });
 
 builder.Build().Run();
-
 
 

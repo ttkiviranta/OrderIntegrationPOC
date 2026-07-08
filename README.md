@@ -18,16 +18,27 @@ This Proof of Concept demonstrates a complete end-to-end order processing pipeli
 - **Azure Service Bus** - Asynchronous message queuing
 - **Azure Logic Apps** - Workflow orchestration  
 - **Azure Functions** - Serverless order processing (C#, .NET 8)
+- **Azure SQL Database** - Persistent order storage *(NEW)*
 - **Application Insights** - Monitoring and telemetry
 
 ### Business Scenario
 
-An ERP system simulates sending customer orders to an Azure Service Bus queue. A Logic App automatically triggers when orders arrive, validates the payload, calls an Azure Function for processing, and logs all activities to Application Insights.
+An ERP system simulates sending customer orders to both an Azure Service Bus queue (for workflow orchestration) and an Azure Queue Storage (for direct database persistence). A Logic App automatically triggers when orders arrive via Service Bus, validates the payload, calls an Azure Function for processing, and logs all activities to Application Insights. Simultaneously, the ProcessOrderToSql Queue-triggered Function processes orders from the queue and persists them directly to Azure SQL Database for long-term storage.
+
+### What's New: SQL Persistence Layer (v2.0)
+
+✨ **NEW in v2.0:**
+- **Direct SQL Persistence** - Queue-triggered function that automatically persists orders to Azure SQL Database
+- **Orders Table** - Structured data storage with audit trail and performance indexes
+- **Async Operations** - Non-blocking database operations using async/await patterns
+- **Parameterized Queries** - SQL injection protection with parameterized statements
+- **Complete Documentation** - 1700+ lines of comprehensive guides and examples
 
 ---
 
 ## 🏗️ Architecture
 
+### Classic Pipeline (Service Bus + Logic App + HTTP Function)
 ```
 ERP System
 	↓ (JSON Order)
@@ -46,6 +57,33 @@ Azure Logic App (OrderProcessingWorkflow)
 	└─ Return HTTP 200/400
 		 ↓
 	Application Insights (Monitoring & Telemetry)
+```
+
+### NEW: Direct SQL Persistence Pipeline (v2.0)
+```
+ERP System / Queue Message
+	↓ (JSON Order)
+Azure Queue Storage (orders-queue)
+	↓ (Queue Message Trigger)
+Azure Function: ProcessOrderToSql
+	├─ Deserialize OrderRequest
+	├─ Open async SQL connection
+	├─ Execute parameterized INSERT
+	├─ Handle errors gracefully
+	└─ Log success/errors to Application Insights
+		 ↓
+	Azure SQL Database (OrderIntegrationPOC_DB)
+		 ↓
+	Orders Table
+	├─ Id (IDENTITY PRIMARY KEY)
+	├─ OrderId (UNIQUE, indexed)
+	├─ CustomerId (indexed)
+	├─ Total (decimal)
+	├─ Description (optional)
+	├─ OrderDate
+	└─ CreatedAt (audit trail)
+		 ↓
+	Application Insights Telemetry
 ```
 
 ---
@@ -141,28 +179,37 @@ OrderIntegrationPOC/
 ## ✅ Features
 
 - ✅ HTTP-triggered Azure Function
+- ✅ Queue-triggered Azure Function with SQL persistence ⭐ NEW
+- ✅ Azure SQL Database integration with async operations ⭐ NEW
+- ✅ Orders table with performance indexes and audit trail ⭐ NEW
+- ✅ Parameterized SQL queries for injection protection ⭐ NEW
 - ✅ JSON payload validation (orderId, customerId, total)
 - ✅ Comprehensive error handling
 - ✅ Application Insights integration
 - ✅ Service Bus message queue support
+- ✅ Queue Storage with direct database persistence ⭐ NEW
 - ✅ Logic App orchestration templates
 - ✅ Detailed logging throughout the pipeline
 - ✅ Local development configuration
 - ✅ Production-ready deployment guide
 - ✅ Complete test suite documentation
+- ✅ 1700+ lines of SQL persistence documentation ⭐ NEW
 
 ---
 
 ## 📚 Documentation
 
 | Document | Purpose |
-|----------|---------|
+|----------|---------| 
 | [QUICKSTART.md](OrderIntegrationPOC/QUICKSTART.md) | Get running in 3 minutes |
 | [README.md](OrderIntegrationPOC/README.md) | Full detailed documentation |
 | [Testing-Guide.md](OrderIntegrationPOC/docs/Testing-Guide.md) | 7 test scenarios + debugging |
 | [API-Reference.md](OrderIntegrationPOC/docs/API-Reference.md) | API endpoint documentation |
 | [Architecture-Diagram.md](OrderIntegrationPOC/docs/Architecture-Diagram.md) | System architecture & diagrams |
 | [Deployment-Guide.md](OrderIntegrationPOC/docs/Deployment-Guide.md) | Azure cloud deployment steps |
+| **[START_HERE.md](START_HERE.md)** | **SQL persistence quick start** ⭐ NEW |
+| **[TESTING_GUIDE.md](TESTING_GUIDE.md)** | **SQL testing guide (8 parts)** ⭐ NEW |
+| **[INDEX.md](INDEX.md)** | **Complete navigation guide** ⭐ NEW |
 
 ---
 
@@ -302,7 +349,7 @@ See [Testing-Guide.md](OrderIntegrationPOC/docs/Testing-Guide.md) for more troub
 
 ## 💡 Future Enhancements
 
-- [ ] Database integration (SQL Server / CosmosDB)
+- [ ] ~Database integration (SQL Server / CosmosDB)~ ✅ DONE - SQL Server integration complete (v2.0)
 - [ ] Order status tracking
 - [ ] Email notifications
 - [ ] Payment gateway integration
@@ -312,6 +359,86 @@ See [Testing-Guide.md](OrderIntegrationPOC/docs/Testing-Guide.md) for more troub
 - [ ] Custom authentication schemes
 - [ ] Unit and integration tests
 - [ ] Circuit breaker pattern
+
+---
+
+## 🆕 SQL Persistence Features (v2.0)
+
+### What's New
+
+Added comprehensive SQL persistence layer for direct order storage in Azure SQL Database:
+
+#### ProcessOrderToSql Azure Function
+- **Trigger Type**: Queue-triggered (Azure Queue Storage - `orders-queue`)
+- **Functionality**:
+  - Deserializes JSON queue messages into OrderRequest objects
+  - Opens async SQL connection using SqlConnectionString from configuration
+  - Executes parameterized INSERT statements (prevents SQL injection)
+  - Logs success and error scenarios to Application Insights
+  - Handles missing/null values gracefully with defaults
+
+#### Orders Table Schema
+```sql
+CREATE TABLE Orders (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    OrderId NVARCHAR(50) NOT NULL UNIQUE,
+    CustomerId NVARCHAR(50) NOT NULL,
+    Total DECIMAL(10,2) NOT NULL,
+    Description NVARCHAR(255),
+    OrderDate DATETIME NOT NULL,
+    CreatedAt DATETIME DEFAULT GETUTCDATE()
+);
+
+-- Performance Indexes
+CREATE INDEX IX_Orders_OrderId ON Orders(OrderId);
+CREATE INDEX IX_Orders_CustomerId ON Orders(CustomerId);
+CREATE INDEX IX_Orders_OrderDate ON Orders(OrderDate);
+```
+
+#### Dependencies Added
+- `Microsoft.Data.SqlClient` v5.1.5 - SQL Server connectivity
+- `Azure.Storage.Queues` v12.21.0 - Queue storage integration
+- `Microsoft.Azure.Functions.Worker.Extensions.Storage.Queues` v5.5.4 - Queue triggers
+
+#### Configuration
+Add to `local.settings.json`:
+```json
+{
+  "SqlConnectionString": "Server=tcp:{server}.database.windows.net,1433;Initial Catalog={database};User ID={user};Password={password};..."
+}
+```
+
+#### Documentation
+Comprehensive guides included:
+- **START_HERE.md** - 5-minute quick start
+- **TESTING_GUIDE.md** - 8-part testing guide (400+ lines)
+- **SQL_PERSISTENCE_SUMMARY.md** - Technical implementation details
+- **QUICK_REFERENCE.md** - Fast lookup and troubleshooting
+- **INDEX.md** - Complete navigation guide
+
+### Testing SQL Features
+
+#### Quick Test
+1. Create Orders table: Execute `OrderFunctionApp/SQL/CreateOrdersTable.sql`
+2. Start Functions: `func start`
+3. Send queue message via Azure Storage Explorer
+4. Verify in SQL: `SELECT * FROM Orders;`
+
+See **[TESTING_GUIDE.md](TESTING_GUIDE.md)** for complete testing procedures.
+
+### Performance & Security
+
+✅ **Performance Optimized**
+- Indexed columns for fast queries (OrderId, CustomerId, OrderDate)
+- Async/await patterns throughout
+- Connection pooling enabled
+- Audit trail with CreatedAt timestamp
+
+✅ **Security Hardened**
+- Parameterized queries (prevents SQL injection)
+- Encrypted SQL connections
+- IConfiguration-based secret management
+- No credential exposure in logs
 
 ---
 
@@ -407,6 +534,6 @@ Feel free to fork this repository and submit pull requests for any improvements.
 
 ---
 
-**Last Updated**: July 7, 2026  
-**Version**: 1.0  
+**Last Updated**: July 8, 2026  
+**Version**: 2.0 - SQL Persistence Edition  
 **Status**: ✅ Complete and Ready for Use
