@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using OrderFunctionApp.Models;
+using System.Text;
 
 namespace OrderFunctionApp.Functions
 {
@@ -101,13 +102,18 @@ namespace OrderFunctionApp.Functions
                 // Create success response
                 _logger.LogInformation("Order processed successfully. OrderId: {OrderId}", orderRequest.OrderId);
                 var successResponse = req.CreateResponse(HttpStatusCode.OK);
-                await successResponse.WriteAsJsonAsync(new
+
+                var successContent = new
                 {
                     success = true,
                     message = "Order received and queued for processing",
                     orderId = orderRequest.OrderId,
-                    timestamp = DateTime.UtcNow
-                });
+                    timestamp = DateTime.UtcNow.ToString("O")  // Pre-format to string
+                };
+
+                var successJson = JsonSerializer.Serialize(successContent);
+                var successBytes = Encoding.UTF8.GetBytes(successJson);
+                successResponse.Body.Write(successBytes, 0, successBytes.Length);
                 return successResponse;
             }
             catch (InvalidOperationException ex)
@@ -133,26 +139,50 @@ namespace OrderFunctionApp.Functions
         {
             var response = req.CreateResponse(statusCode);
 
-            // Set Content-Type header safely
             try
             {
-                response.Headers.Add("Content-Type", "application/json");
-            }
-            catch (FormatException)
-            {
-                // If header format is invalid, continue without the header
-                _logger.LogWarning("Failed to add Content-Type header");
-            }
+                var errorContent = new
+                {
+                    success = false,
+                    error = errorMessage,
+                    timestamp = DateTime.UtcNow.ToString("O")  // Pre-format to string to avoid issues
+                };
 
-            var errorContent = new
-            {
-                success = false,
-                error = errorMessage,
-                timestamp = DateTime.UtcNow
-            };
+                // Serialize to JSON string first
+                var jsonString = JsonSerializer.Serialize(errorContent);
+                var jsonBytes = Encoding.UTF8.GetBytes(jsonString);
 
-            await response.WriteAsJsonAsync(errorContent);
-            return response;
+                // Write directly to Body stream to avoid header issues
+                response.Body.Write(jsonBytes, 0, jsonBytes.Length);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating error response");
+                // Fallback: write plain error text
+                try
+                {
+                    var plainText = $"{{\"success\":false,\"error\":\"{EscapeJson(errorMessage)}\"}}";
+                    var plainBytes = Encoding.UTF8.GetBytes(plainText);
+                    response.Body.Write(plainBytes, 0, plainBytes.Length);
+                }
+                catch { }
+
+                return response;
+            }
+        }
+
+        /// <summary>
+        /// Escapes a string for JSON embedding.
+        /// </summary>
+        private static string EscapeJson(string text)
+        {
+            return text
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r")
+                .Replace("\t", "\\t");
         }
     }
 }
