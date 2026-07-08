@@ -52,7 +52,7 @@ namespace OrderFunctionApp.Functions
                 if (string.IsNullOrWhiteSpace(requestBody))
                 {
                     _logger.LogWarning("Request body is empty");
-                    return CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body cannot be empty");
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body cannot be empty");
                 }
 
                 var options = new JsonSerializerOptions
@@ -68,13 +68,13 @@ namespace OrderFunctionApp.Functions
                 catch (JsonException ex)
                 {
                     _logger.LogWarning(ex, "Failed to deserialize request body");
-                    return CreateErrorResponse(req, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
                 }
 
                 if (orderRequest == null)
                 {
                     _logger.LogWarning("Deserialized order request is null");
-                    return CreateErrorResponse(req, HttpStatusCode.BadRequest, "Order request cannot be empty");
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Order request cannot be empty");
                 }
 
                 // Set OrderDate if not provided
@@ -92,7 +92,7 @@ namespace OrderFunctionApp.Functions
                 {
                     var errorMessages = string.Join("; ", validationResults.Select(v => v.ErrorMessage));
                     _logger.LogWarning("OrderRequest validation failed: {Errors}", errorMessages);
-                    return CreateErrorResponse(req, HttpStatusCode.BadRequest, $"Validation failed: {errorMessages}");
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, $"Validation failed: {errorMessages}");
                 }
 
                 // Process the order
@@ -113,12 +113,12 @@ namespace OrderFunctionApp.Functions
             catch (InvalidOperationException ex)
             {
                 _logger.LogError(ex, "Operational error processing order");
-                return CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Failed to process order: " + ex.Message);
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Failed to process order: " + ex.Message);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error processing order");
-                return CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred while processing the order");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred while processing the order");
             }
         }
 
@@ -129,17 +129,29 @@ namespace OrderFunctionApp.Functions
         /// <param name="statusCode">The HTTP status code for the error response.</param>
         /// <param name="errorMessage">The error message to include in the response.</param>
         /// <returns>An HTTP response with the specified status code and error message.</returns>
-        private HttpResponseData CreateErrorResponse(HttpRequestData req, HttpStatusCode statusCode, string errorMessage)
+        private async Task<HttpResponseData> CreateErrorResponse(HttpRequestData req, HttpStatusCode statusCode, string errorMessage)
         {
             var response = req.CreateResponse(statusCode);
-            response.Headers.Add("Content-Type", "application/json");
+
+            // Set Content-Type header safely
+            try
+            {
+                response.Headers.Add("Content-Type", "application/json");
+            }
+            catch (FormatException)
+            {
+                // If header format is invalid, continue without the header
+                _logger.LogWarning("Failed to add Content-Type header");
+            }
+
             var errorContent = new
             {
                 success = false,
                 error = errorMessage,
                 timestamp = DateTime.UtcNow
             };
-            response.WriteAsJsonAsync(errorContent);
+
+            await response.WriteAsJsonAsync(errorContent);
             return response;
         }
     }
