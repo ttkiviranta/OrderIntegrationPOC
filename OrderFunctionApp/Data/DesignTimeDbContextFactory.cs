@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace OrderFunctionApp.Data
 {
@@ -16,8 +17,16 @@ namespace OrderFunctionApp.Data
         /// <returns>A configured OrderIntegrationContext instance.</returns>
         public OrderIntegrationContext CreateDbContext(string[] args)
         {
-            var connectionString = Environment.GetEnvironmentVariable("SqlConnectionString")
-                ?? "Server=tcp:orderintegrationpoc-sqlserver.database.windows.net,1433;Initial Catalog=OrderIntegrationPOC_DB;Persist Security Info=False;User ID=orderadmin;Password=PocDemo!2024;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+            // Load configuration from local.settings.json for migrations
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("local.settings.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            // Create connection string for local SQL Express database
+            // Ensure no encryption is used for local connections
+            var connectionString = "Server=TimoK\\SQLEXPRESS;Database=OrderIntegrationPOC_DB;Trusted_Connection=True;MultipleActiveResultSets=True;Encrypt=False;";
 
             var optionsBuilder = new DbContextOptionsBuilder<OrderIntegrationContext>();
             optionsBuilder.UseSqlServer(connectionString, sqlOptions =>

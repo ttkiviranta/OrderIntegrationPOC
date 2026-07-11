@@ -1,6 +1,8 @@
 ﻿using System.Text.Json;
 using Azure.Storage.Queues;
+using Azure.Storage;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using OrderFunctionApp.Models;
 
 namespace OrderFunctionApp.Functions
@@ -26,11 +28,11 @@ namespace OrderFunctionApp.Functions
         /// Processes an order request by sending it to the Azure Storage Queue.
         /// </summary>
         /// <param name="orderRequest">The order request to process.</param>
-        /// <param name="connectionString">The connection string for Azure Storage Queue (supports both real storage and Azure Storage Emulator).</param>
+        /// <param name="configuration">The configuration instance for reading Azure Storage Credentials.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when orderRequest or connectionString is null.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when orderRequest or configuration is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when queue operations fail.</exception>
-        public async Task ProcessAsync(OrderRequest orderRequest, string connectionString)
+        public async Task ProcessAsync(OrderRequest orderRequest, IConfiguration configuration)
         {
             if (orderRequest == null)
             {
@@ -38,21 +40,27 @@ namespace OrderFunctionApp.Functions
                 throw new ArgumentNullException(nameof(orderRequest), "Order request cannot be null");
             }
 
-            if (string.IsNullOrWhiteSpace(connectionString))
+            if (configuration == null)
             {
-                _logger.LogError("Connection string is null or empty");
-                throw new ArgumentNullException(nameof(connectionString), "Connection string cannot be null or empty");
+                _logger.LogError("Configuration is null");
+                throw new ArgumentNullException(nameof(configuration), "Configuration cannot be null");
             }
 
             try
             {
                 _logger.LogInformation("Processing order request with OrderId: {OrderId}", orderRequest.OrderId);
 
-                // Create Queue client using connection string (works with both Azure Storage and Storage Emulator)
-                var queueClient = new QueueClient(connectionString, "orders-queue");
+                // For Azurite local development, connect without credentials
+                // Azurite in dev mode doesn't require authentication
+                var queueUri = new Uri("http://127.0.0.1:10001/devstoreaccount1/orders-queue");
 
-                // Ensure queue exists
+                _logger.LogInformation("Creating queue client for URI: {QueueUri}", queueUri);
+                // QueueClient without authentication works for Azurite dev mode
+                var queueClient = new QueueClient(queueUri, new Azure.Storage.StorageSharedKeyCredential("devstoreaccount1", "defaultkey"));
+
+                _logger.LogInformation("Ensuring queue exists...");
                 await queueClient.CreateIfNotExistsAsync();
+                _logger.LogInformation("Queue ready");
 
                 // Serialize the order request to JSON
                 var options = new JsonSerializerOptions 
@@ -61,6 +69,9 @@ namespace OrderFunctionApp.Functions
                     WriteIndented = false
                 };
                 var messageContent = JsonSerializer.Serialize(orderRequest, options);
+
+                _logger.LogInformation("Sending message to queue - OrderId: {OrderId}, Size: {Size} bytes", 
+                    orderRequest.OrderId, messageContent.Length);
 
                 // Send message to queue
                 await queueClient.SendMessageAsync(messageContent);

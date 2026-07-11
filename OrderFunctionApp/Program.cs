@@ -1,4 +1,4 @@
-using Microsoft.ApplicationInsights;
+ using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
@@ -33,9 +33,11 @@ builder.Services
 builder.Services.AddDbContextFactory<OrderIntegrationContext>(options =>
 {
     var connectionString = builder.Configuration["SqlConnectionString"];
+
+    // Use provided connection string or fallback to local SQL Express
     if (string.IsNullOrEmpty(connectionString))
     {
-        throw new InvalidOperationException("SqlConnectionString is not configured in settings");
+        connectionString = "Server=TimoK\\SQLEXPRESS;Database=OrderIntegrationPOC_DB;Trusted_Connection=True;MultipleActiveResultSets=True;Encrypt=False;";
     }
 
     options.UseSqlServer(connectionString, sqlOptions =>
@@ -47,6 +49,7 @@ builder.Services.AddDbContextFactory<OrderIntegrationContext>(options =>
         sqlOptions.CommandTimeout(30);
     });
 });
+
 
 // Register OrderProcessor for dependency injection
 builder.Services.AddScoped<OrderProcessor>();

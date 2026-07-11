@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using OrderFunctionApp.Models;
 using System.Text;
 
@@ -17,20 +18,19 @@ namespace OrderFunctionApp.Functions
     {
         private readonly ILogger<Function1> _logger;
         private readonly OrderProcessor _orderProcessor;
-        private readonly string _storageConnectionString;
+        private readonly IConfiguration _configuration;
 
         /// <summary>
         /// Initializes a new instance of the Function1 class.
         /// </summary>
         /// <param name="logger">The logger instance for this function.</param>
         /// <param name="orderProcessor">The order processor for handling order requests.</param>
-        public Function1(ILogger<Function1> logger, OrderProcessor orderProcessor)
+        /// <param name="configuration">The configuration instance for reading settings.</param>
+        public Function1(ILogger<Function1> logger, OrderProcessor orderProcessor, IConfiguration configuration)
         {
             _logger = logger;
             _orderProcessor = orderProcessor;
-            // Read connection string from environment
-            _storageConnectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage") 
-                ?? throw new InvalidOperationException("AzureWebJobsStorage connection string not found in configuration");
+            _configuration = configuration;
         }
 
         /// <summary>
@@ -97,7 +97,7 @@ namespace OrderFunctionApp.Functions
                 }
 
                 // Process the order
-                await _orderProcessor.ProcessAsync(orderRequest, _storageConnectionString);
+                await _orderProcessor.ProcessAsync(orderRequest, _configuration);
 
                 // Create success response
                 _logger.LogInformation("Order processed successfully. OrderId: {OrderId}", orderRequest.OrderId);
@@ -111,9 +111,7 @@ namespace OrderFunctionApp.Functions
                     timestamp = DateTime.UtcNow.ToString("O")  // Pre-format to string
                 };
 
-                var successJson = JsonSerializer.Serialize(successContent);
-                var successBytes = Encoding.UTF8.GetBytes(successJson);
-                successResponse.Body.Write(successBytes, 0, successBytes.Length);
+                await successResponse.WriteAsJsonAsync(successContent);
                 return successResponse;
             }
             catch (InvalidOperationException ex)
@@ -139,50 +137,15 @@ namespace OrderFunctionApp.Functions
         {
             var response = req.CreateResponse(statusCode);
 
-            try
+            var errorContent = new
             {
-                var errorContent = new
-                {
-                    success = false,
-                    error = errorMessage,
-                    timestamp = DateTime.UtcNow.ToString("O")  // Pre-format to string to avoid issues
-                };
+                success = false,
+                error = errorMessage,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
 
-                // Serialize to JSON string first
-                var jsonString = JsonSerializer.Serialize(errorContent);
-                var jsonBytes = Encoding.UTF8.GetBytes(jsonString);
-
-                // Write directly to Body stream to avoid header issues
-                response.Body.Write(jsonBytes, 0, jsonBytes.Length);
-                return response;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating error response");
-                // Fallback: write plain error text
-                try
-                {
-                    var plainText = $"{{\"success\":false,\"error\":\"{EscapeJson(errorMessage)}\"}}";
-                    var plainBytes = Encoding.UTF8.GetBytes(plainText);
-                    response.Body.Write(plainBytes, 0, plainBytes.Length);
-                }
-                catch { }
-
-                return response;
-            }
-        }
-
-        /// <summary>
-        /// Escapes a string for JSON embedding.
-        /// </summary>
-        private static string EscapeJson(string text)
-        {
-            return text
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r")
-                .Replace("\t", "\\t");
+            await response.WriteAsJsonAsync(errorContent);
+            return response;
         }
     }
 }
