@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 using Azure.Storage.Queues;
-using Azure.Storage;
+using Azure.Storage.Queues.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using OrderFunctionApp.Models;
@@ -50,13 +50,20 @@ namespace OrderFunctionApp.Functions
             {
                 _logger.LogInformation("Processing order request with OrderId: {OrderId}", orderRequest.OrderId);
 
-                // For Azurite local development, connect without credentials
-                // Azurite in dev mode doesn't require authentication
-                var queueUri = new Uri("http://127.0.0.1:10001/devstoreaccount1/orders-queue");
+                var storageConnectionString = configuration["AzureWebJobsStorage"];
+                if (string.IsNullOrWhiteSpace(storageConnectionString))
+                {
+                    throw new InvalidOperationException("AzureWebJobsStorage configuration is missing.");
+                }
 
-                _logger.LogInformation("Creating queue client for URI: {QueueUri}", queueUri);
-                // QueueClient without authentication works for Azurite dev mode
-                var queueClient = new QueueClient(queueUri, new Azure.Storage.StorageSharedKeyCredential("devstoreaccount1", "defaultkey"));
+                _logger.LogInformation("Creating queue client using AzureWebJobsStorage connection string");
+                var queueClient = new QueueClient(
+                    storageConnectionString,
+                    "orders-queue",
+                    new QueueClientOptions
+                    {
+                        MessageEncoding = QueueMessageEncoding.Base64
+                    });
 
                 _logger.LogInformation("Ensuring queue exists...");
                 await queueClient.CreateIfNotExistsAsync();
