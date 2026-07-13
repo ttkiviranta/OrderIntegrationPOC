@@ -8,7 +8,7 @@ A .NET 8 Azure Functions isolated-worker application that receives and processes
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Direct HTTP Insert** (`/api/orders/direct`) | ✅ **WORKING** | Fully functional, 5 orders verified |
-| **Queue-Based Processing** (`/api/orders`) | ❌ **NOT WORKING** | HTTP 500 - Azurite credential issues |
+| **Queue-Based Processing** (`/api/orders`) | ✅ **WORKING** | End-to-end flow verified (HTTP → Queue → SQL) |
 | **Database (SQL Server)** | ✅ **WORKING** | EF Core migrations applied successfully |
 | **HTTP Endpoint & DI** | ✅ **WORKING** | Configuration and routing functional |
 
@@ -60,28 +60,22 @@ curl -X POST http://localhost:7071/api/orders/direct \
 
 ---
 
-## 🔴 What's NOT Working
+## 🟢 Queue Processing Status Update
 
 ### Queue-Based Processing (HTTP → Queue → SQL)
 - **Endpoint**: `POST /api/orders`
-- **Status**: ❌ **NOT FUNCTIONAL**
-- **HTTP Status**: 500 Internal Server Error
-- **Root Cause**: Azure SDK credential validation fails with Azurite dev account
+- **Status**: ✅ **FUNCTIONAL**
+- **HTTP Status**: 200 OK
+- **Fix Applied**:
+  - `OrderProcessor` now uses `AzureWebJobsStorage` connection string.
+  - Queue client uses `QueueMessageEncoding.Base64` to match trigger decoding.
 
-**What Fails**:
+**Verified Flow**:
 1. Request received (✅)
 2. Order validated (✅)
-3. `OrderProcessor.ProcessAsync()` called (✅)
-4. `StorageSharedKeyCredential` creation ❌ **FAILS HERE**
-5. Error: `FormatException: The input is not a valid Base-64 string...`
-6. Order never reaches queue
-7. Queue trigger never fires
-8. Database never updated
-
-**Technical Root Cause**:
-- Azurite default dev account key contains special characters (`+`)
-- Azure SDK's `StorageSharedKeyCredential` fails base-64 validation
-- Multiple solutions attempted, all failed (direct string, URL decode, byte arrays, etc.)
+3. Message enqueued to `orders-queue` (✅)
+4. `ProcessOrderToSql` queue trigger fired (✅)
+5. Order inserted into SQL Server (✅)
 
 ---
 
@@ -98,12 +92,11 @@ DIRECT-FINAL-002        → $1799.99  ✅
 Total: 5 orders successfully inserted and verified
 ```
 
-### Queue Endpoint (All Failed ❌)
+### Queue Endpoint (Now Passing ✅)
 ```
-QUEUE-TEST-001          → HTTP 500 - Credential error
-QUEUE-FRESH-001         → HTTP 500 - Base-64 validation
-QUEUE-FIXED-URI-001     → HTTP 500 - FormatException
-... (6 more attempts, all failed on credentials)
+QUEUE-FIX-002           → HTTP 200
+ProcessOrderToSql       → Triggered successfully
+SQL Insert              → 1 row persisted (verified)
 ```
 
 ---
@@ -150,25 +143,13 @@ Invoke-WebRequest `
 
 ## 🔧 Known Issues
 
-### Issue #1: Queue Credentials (BLOCKING)
-**Problem**: `StorageSharedKeyCredential` cannot validate Azurite dev account key
-**Impact**: Entire queue path non-functional
-**Attempted Fixes**:
-- Direct hardcoded string → Failed
-- URL decode → Failed  
-- Byte array representation → Failed
-- Double base-64 encoding → Failed
+### Issue #1: Queue processing configuration mismatch (RESOLVED)
+**Resolution**:
+- Switched queue client creation to use `AzureWebJobsStorage`.
+- Enabled Base64 encoding in producer to match Functions queue trigger.
 
-**Solutions to Try**:
-1. ✅ **Switch to Azure Storage Emulator v5.x** (better .NET 8 support)
-2. ✅ Use real Azure Storage Account
-3. ✅ Implement mock queue for local dev
-4. ✅ Use Azure Key Vault for credential management
-
-### Issue #2: Queue Trigger Disabled
-**Impact**: `ProcessOrderToSql` queue trigger fails at indexing
-**Cause**: Cannot resolve storage credentials at start time
-**Solution**: Fix Issue #1 first
+### Issue #2: Queue Trigger Disabled (RESOLVED)
+**Resolution**: Queue trigger now indexes and executes correctly in local development.
 
 ### Issue #3: Development-Only Configuration
 **Impact**: Hardcoded connection strings, no production setup
@@ -185,10 +166,10 @@ OrderIntegrationPOC/
 │   │   ├── OrderIntegrationContext.cs
 │   │   └── DesignTimeDbContextFactory.cs
 │   ├── Functions/
-│   │   ├── Function1.cs                    # /api/orders (queue - broken)
+│   │   ├── Function1.cs                    # /api/orders (queue - working)
 │   │   ├── InsertOrderDirectly.cs          # /api/orders/direct (working)
-│   │   ├── OrderProcessor.cs               # Queue enqueue (broken)
-│   │   └── ProcessOrderToSql.cs            # Queue trigger (disabled)
+│   │   ├── OrderProcessor.cs               # Queue enqueue (working)
+│   │   └── ProcessOrderToSql.cs            # Queue trigger (working)
 │   ├── Models/
 │   │   ├── Order.cs                        # EF entity
 │   │   └── OrderRequest.cs                 # DTO
@@ -205,8 +186,8 @@ OrderIntegrationPOC/
 ### Modified Files
 1. **Program.cs**: Added IConfiguration DI, DbContextFactory setup
 2. **Function1.cs**: Added IConfiguration, async response writing
-3. **OrderProcessor.cs**: Multiple credential approaches (all failed)
-4. **ProcessOrderToSql.cs**: Queue trigger with debug logs (disabled)
+3. **OrderProcessor.cs**: Uses AzureWebJobsStorage + Base64 queue encoding (working)
+4. **ProcessOrderToSql.cs**: Queue trigger verified and inserting to SQL
 5. **DesignTimeDbContextFactory.cs**: Local SQL configuration
 6. **host.json**: Queue settings added
 7. **local.settings.json**: Azurite + SQL connection strings
@@ -227,7 +208,7 @@ OrderIntegrationPOC/
 | Order validation | ✅ | DataAnnotations working |
 | DI & Configuration | ✅ | Properly set up |
 | Async operations | ✅ | Function handlers async |
-| Queue client creation | ❌ | Credential validation fails |
+| Queue client creation | ✅ | Uses AzureWebJobsStorage + Base64 encoding |
 | Message serialization | ⚠️ | Logic OK, never reached |
 | Queue trigger | ❌ | Fails at index time |
 
@@ -283,19 +264,19 @@ EF Core DbContext
 SQL Server dbo.Orders ✅
 ```
 
-### Broken Path: Queue Processing
+### Queue Path: Working Processing
 ```
 POST /api/orders
     ↓
 Function1 / ReceiveOrder ✅
     ↓
-OrderProcessor.ProcessAsync ❌ FAILS
-    ↓ (never reached)
+OrderProcessor.ProcessAsync ✅
+	↓
 Azurite Queue
-    ↓ (never reached)
-ProcessOrderToSql (queue trigger) ❌ DISABLED
-    ↓ (never reached)
-SQL Server dbo.Orders
+	↓
+ProcessOrderToSql (queue trigger) ✅
+	↓
+SQL Server dbo.Orders ✅
 ```
 
 ---
@@ -304,19 +285,19 @@ SQL Server dbo.Orders
 
 **What You Need to Know**:
 - ✅ **Direct database insertion works perfectly** - use `/api/orders/direct` for reliable order persistence
-- ❌ **Queue-based processing is broken** - blocked by Azurite credential validation issues
+- ✅ **Queue-based processing now works** - HTTP → Queue → Trigger → SQL verified
 - ✅ **Infrastructure is sound** - SQL Server, EF Core, HTTP routing all functional
 - ⏱️ **Time to fix**: 1-2 hours with correct storage solution
 
 **Current Usability**:
 - Use the direct endpoint (`/api/orders/direct`) for production-ready functionality
-- Queue path should NOT be used until credentials issue is resolved
+- Queue path is available for local development and testing
 
 ---
 
-**Last Updated**: 2026-07-11  
+**Last Updated**: 2026-07-13  
 **Framework**: .NET 8 • Azure Functions • EF Core • SQL Server  
-**Status**: Development • Direct path ready • Queue path blocked
+**Status**: Development • Direct path ready • Queue path working locally
 
 ---
 
