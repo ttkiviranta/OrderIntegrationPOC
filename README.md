@@ -1,7 +1,16 @@
 # OrderIntegrationPOC - Order Processing Application
 
-## Overview
-A .NET 8 Azure Functions isolated-worker application that receives and processes orders via HTTP endpoints and Azure Storage Queues, persisting them to a local SQL Server database using Entity Framework Core.
+## 📋 Overview
+This Proof of Concept demonstrates a complete end-to-end order processing pipeline integrating:
+
+- **Azure Service Bus** - Asynchronous message queuing
+- **Azure Logic Apps** - Workflow orchestration
+- **Azure Functions** - Serverless order processing (C#, .NET 8)
+- **Azure SQL Database** - Persistent order storage
+- **Application Insights** - Monitoring and telemetry
+
+### Business Scenario
+An ERP system simulates sending customer orders to both an Azure Service Bus queue (for workflow orchestration) and an Azure Queue Storage queue (for direct database persistence). A Logic App automatically triggers when orders arrive via Service Bus, validates the payload, calls an Azure Function for processing, and logs activities to Application Insights. Simultaneously, the `ProcessOrderToSql` queue-triggered Function processes orders from the queue and persists them to Azure SQL Database for long-term storage.
 
 ## Status Summary
 
