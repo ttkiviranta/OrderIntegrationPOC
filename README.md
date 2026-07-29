@@ -741,6 +741,46 @@ See **[TESTING_GUIDE.md](TESTING_GUIDE.md)** for complete testing procedures.
 
 ---
 
+## 🔭 What Next (Enable Logic Apps End-to-End)
+
+To fully enable the Logic Apps orchestration path in Azure, complete these steps:
+
+1. **Deploy Azure resources**
+   - Run `deploy.ps1` (or deploy manually) to create:
+	 - Resource Group
+	 - Service Bus namespace + `orders-incoming` queue
+	 - Logic App
+	 - Function App
+	 - Storage Account
+	 - Application Insights
+
+2. **Publish the Function App to Azure**
+   - Deploy the current .NET 8 isolated worker Function App.
+   - Confirm the `POST /api/orders` endpoint is reachable in Azure.
+
+3. **Update Logic App HTTP action URI**
+   - Replace `REPLACE_FUNCTION_URL` in the Logic App definition with the real Function URL.
+   - Include a Function key if your Function authorization level requires it.
+
+4. **Configure Service Bus connection in Logic App**
+   - Ensure the trigger uses the correct Service Bus namespace and queue (`orders-incoming`).
+   - Validate connection authentication and permissions.
+
+5. **Run end-to-end validation**
+   - Send a test message to Service Bus.
+   - Verify a Logic App run is triggered.
+   - Verify the Logic App calls the Function successfully (HTTP 200).
+   - Verify the order is persisted to SQL.
+   - Verify telemetry in Application Insights.
+
+6. **Optional hardening for production**
+   - Move secrets to Key Vault.
+   - Use managed identities where possible.
+   - Add retry/error handling policies in Logic App.
+   - Add alerts and dashboards in Application Insights.
+
+---
+
 ## 📖 Learning Resources
 
 - [Azure Functions Documentation](https://learn.microsoft.com/en-us/azure/azure-functions/)
