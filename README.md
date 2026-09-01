@@ -857,6 +857,63 @@ Swagger UI documentation is not available in the current implementation due to c
 **Future Resolution**:
 As Microsoft releases stable OpenAPI support for .NET 8 Isolated Workers, this issue will be resolved. Monitor the [Azure Functions roadmap](https://github.com/Azure/azure-functions-host) for updates.
 
+## Logic Apps Orchestration
+
+This repository includes an optional Logic Apps workflow that integrates with the existing Functions + Queue + EF Core + SQL pipeline. The Logic App monitors the Orders table and sends a notification (email or Microsoft Teams) whenever a new order row is created.
+
+Key points
+
+- Trigger: "When an item is created (SQL Server)"
+- Database: Uses the same SQL Server instance and database as the EF Core DbContext (Orders table)
+- Polling interval: 1 minute
+- Fields read: OrderId, CustomerId, Total, CreatedAt
+- Notification: Office 365 Outlook (Send an email) or Microsoft Teams (Post a message)
+
+How it fits in the existing architecture
+
+ASCII diagram (simple):
+
+Function / HTTP client -> Queue Storage (orders-queue) -> Queue-triggered Function (ProcessOrderToSql) -> SQL Server (Orders table)
+                                                                                                            |
+                                                                                                            v
+                                                                                                    Logic App (When item created) -> Email / Teams notification
+
+Explanation
+
+1. Orders are either inserted directly (HTTP direct insert) or via the queue-based flow. The queue-triggered function ProcessOrderToSql persists orders into the Orders table in SQL Server.
+2. The Logic App polls the Orders table every 1 minute using the built-in SQL Server trigger "When an item is created (SQL Server)". When a new row appears, the Logic App reads the OrderId, CustomerId, Total and CreatedAt values.
+3. The Logic App then sends a notification using the configured connector (Office 365 Outlook or Microsoft Teams). The notification body contains the order details.
+
+Where to find the Logic App template
+
+- File: /logicapps/order-notification.json
+- Local guidance: /logicapps/README.md
+
+Import and configuration (summary)
+
+1. Open the Azure Portal, go to Logic Apps and create a new Logic App (Consumption or Standard as you prefer).
+2. In the Logic App Designer, choose "Import from template" and upload /logicapps/order-notification.json.
+3. Configure the SQL Server connection (server, database, authentication). Use the same SQL database that EF Core writes to.
+4. Configure the notification connector (Office 365 Outlook or Microsoft Teams). Provide appropriate credentials/permissions.
+5. Verify trigger settings: set polling interval to 1 minute (PT1M).
+6. Save and enable the Logic App.
+
+Sample notification body
+
+Order created:
+- OrderId: @{triggerBody()?['OrderId']}
+- CustomerId: @{triggerBody()?['CustomerId']}
+- Total: @{triggerBody()?['Total']}
+- CreatedAt: @{triggerBody()?['CreatedAt']}
+
+Notes
+
+- The Logic App monitors SQL table inserts and is intended for near-real-time notifications. Because the trigger polls, consider costs and throttling on high insert volumes.
+- The Logic App requires valid connector credentials for SQL and the selected notification channel.
+- Do not change the existing Azure Functions code. The Logic App only reads from the SQL database after persistence.
+
+---
+
 **References**:
 - [Azure Functions OpenAPI Extension](https://github.com/Azure/azure-functions-openapi-extension)
 - [.NET 8 Isolated Worker Limitations](https://learn.microsoft.com/en-us/azure/azure-functions/functions-dotnet-dependency-injection)

@@ -1,0 +1,184 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "SqlConnection": {
+      "type": "string",
+      "defaultValue": "__REPLACE_WITH_SQL_CONNECTION_RESOURCE_ID__",
+      "metadata": {
+        "description": "Logic Apps API connection resource id for the SQL Server connector. Example: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Web/connections/sql"
+      }
+    },
+    "Office365Connection": {
+      "type": "string",
+      "defaultValue": "__REPLACE_WITH_OFFICE365_CONNECTION_RESOURCE_ID__",
+      "metadata": {
+        "description": "Logic Apps API connection resource id for Office 365 Outlook connector"
+      }
+    },
+    "TeamsConnection": {
+      "type": "string",
+      "defaultValue": "__REPLACE_WITH_TEAMS_CONNECTION_RESOURCE_ID__",
+      "metadata": {
+        "description": "Logic Apps API connection resource id for Microsoft Teams connector"
+      }
+    },
+    "RecipientEmail": {
+      "type": "string",
+      "defaultValue": "__REPLACE_WITH_RECIPIENT_EMAIL__",
+      "metadata": {
+        "description": "Recipient email address for the notification"
+      }
+    },
+    "TeamId": {
+      "type": "string",
+      "defaultValue": "__REPLACE_WITH_TEAM_ID__",
+      "metadata": {
+        "description": "Microsoft Teams team id where the message will be posted"
+      }
+    },
+    "ChannelId": {
+      "type": "string",
+      "defaultValue": "__REPLACE_WITH_CHANNEL_ID__",
+      "metadata": {
+        "description": "Microsoft Teams channel id where the message will be posted"
+      }
+    },
+    "TableName": {
+      "type": "string",
+      "defaultValue": "dbo.Orders"
+    },
+    "PollingInterval": {
+      "type": "string",
+      "defaultValue": "PT1M",
+      "metadata": {
+        "description": "ISO 8601 duration for polling interval. PT1M = 1 minute"
+      }
+    }
+  },
+  "triggers": {
+    "When_an_item_is_created": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('SqlConnection')"
+          }
+        },
+        "method": "get",
+        "path": "/datasets/default/tables/Orders/onnewitems",
+        "queries": {
+          "pollingInterval": "@parameters('PollingInterval')",
+          "select": "OrderId,CustomerId,Total,CreatedAt"
+        }
+      }
+    }
+  },
+  "actions": {
+    "Prepare_notification_body": {
+      "type": "Compose",
+      "inputs": "Order created:\n- OrderId: @{triggerBody()?['OrderId']}\n- CustomerId: @{triggerBody()?['CustomerId']}\n- Total: @{triggerBody()?['Total']}\n- CreatedAt: @{triggerBody()?['CreatedAt']}"
+    },
+    "Send_email_notification": {
+      "type": "ApiConnection",
+      "runAfter": {
+        "Prepare_notification_body": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('Office365Connection')"
+          }
+        },
+        "method": "post",
+        "path": "/v2/Mail",
+        "body": {
+          "Message": {
+            "Subject": "New order created: @{triggerBody()?['OrderId']}",
+            "Body": {
+              "ContentType": "Text",
+              "Content": "@outputs('Prepare_notification_body')"
+            },
+            "ToRecipients": [
+              {
+                "EmailAddress": {
+                  "Address": "@parameters('RecipientEmail')"
+                }
+              }
+            ]
+          },
+          "SaveToSentItems": "true"
+        }
+      }
+    },
+    "Send_teams_message": {
+      "type": "ApiConnection",
+      "runAfter": {
+        "Prepare_notification_body": [
+          "Succeeded"
+        ],
+        "Send_email_notification": [
+          "Succeeded",
+          "Failed",
+          "Skipped",
+          "TimedOut"
+        ]
+      },
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('TeamsConnection')"
+          }
+        },
+        "method": "post",
+        "path": "/v3/conversations/@{parameters('ChannelId')}/activities",
+        "body": {
+          "type": "message",
+          "attachments": [
+            {
+              "contentType": "application/vnd.microsoft.card.adaptive",
+              "content": {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard",
+                "version": "1.4",
+                "body": [
+                  {
+                    "type": "TextBlock",
+                    "size": "Large",
+                    "weight": "Bolder",
+                    "text": "New Order Created"
+                  },
+                  {
+                    "type": "FactSet",
+                    "facts": [
+                      {
+                        "title": "OrderId:",
+                        "value": "@{triggerBody()?['OrderId']}"
+                      },
+                      {
+                        "title": "CustomerId:",
+                        "value": "@{triggerBody()?['CustomerId']}"
+                      },
+                      {
+                        "title": "Total:",
+                        "value": "@{triggerBody()?['Total']}"
+                      },
+                      {
+                        "title": "CreatedAt:",
+                        "value": "@{triggerBody()?['CreatedAt']}"
+                      }
+                    ]
+                  }
+                ],
+                "actions": []
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "outputs": {}
+}
