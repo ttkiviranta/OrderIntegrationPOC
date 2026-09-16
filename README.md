@@ -3,11 +3,30 @@
 ## 📋 Overview
 This Proof of Concept demonstrates a complete end-to-end order processing pipeline integrating:
 
-- **Azure Service Bus** - Asynchronous message queuing
+- **Azure Service Bus** - Asynchronous message queuing (with DLQ handling)
 - **Azure Logic Apps** - Workflow orchestration
 - **Azure Functions** - Serverless order processing (C#, .NET 8)
-- **Azure SQL Database** - Persistent order storage
+- **Azure SQL Database** - Persistent order storage with EF Core
 - **Application Insights** - Monitoring and telemetry
+- **Azure Key Vault** - Secure secrets management
+- **Infrastructure as Code** - Bicep templates for repeatable deployments
+
+### 🆕 Enhanced Version 2.0 - Production Ready
+
+This repository now includes comprehensive enterprise-grade enhancements:
+- ✅ Extended domain models (Customer, OrderLine entities)
+- ✅ Repository Pattern with IOrderRepository
+- ✅ Service Bus trigger for ERP order ingestion
+- ✅ Retry policies with exponential backoff
+- ✅ Dead-letter queue (DLQ) handling
+- ✅ FluentValidation for all business rules
+- ✅ AutoMapper for DTO transformations
+- ✅ xUnit unit and integration tests
+- ✅ Bicep infrastructure templates
+- ✅ Security hardening documentation
+- ✅ Full Azure Key Vault & Managed Identity integration
+
+**For complete documentation, see [README_ENTERPRISE.md](README_ENTERPRISE.md)**
 
 ### Business Scenario
 An ERP system simulates sending customer orders to both an Azure Service Bus queue (for workflow orchestration) and an Azure Queue Storage queue (for direct database persistence). A Logic App automatically triggers when orders arrive via Service Bus, validates the payload, calls an Azure Function for processing, and logs activities to Application Insights. Simultaneously, the `ProcessOrderToSql` queue-triggered Function processes orders from the queue and persists them to Azure SQL Database for long-term storage.
@@ -911,6 +930,33 @@ Notes
 - The Logic App monitors SQL table inserts and is intended for near-real-time notifications. Because the trigger polls, consider costs and throttling on high insert volumes.
 - The Logic App requires valid connector credentials for SQL and the selected notification channel.
 - Do not change the existing Azure Functions code. The Logic App only reads from the SQL database after persistence.
+
+---
+
+## 📚 Documentation & Guides
+
+### Core Documentation
+- **[README_ENTERPRISE.md](README_ENTERPRISE.md)** - Complete enterprise edition documentation (V2.0)
+- **[SECURITY.md](SECURITY.md)** - Comprehensive security hardening guide
+- **[bicep/INFRASTRUCTURE.md](bicep/INFRASTRUCTURE.md)** - Infrastructure as Code deployment guide
+
+### Project-Specific Guides
+- **[OrderFunctionApp/README.md](OrderFunctionApp/README.md)** - Azure Functions configuration
+- **[OrderFunctionApp/README_EFCORE_INTEGRATION.md](OrderFunctionApp/README_EFCORE_INTEGRATION.md)** - Entity Framework Core patterns
+- **[OrderFunctionApp/README_SQL.md](OrderFunctionApp/README_SQL.md)** - SQL Server setup
+- **[logicapps/DEPLOY.md](logicapps/DEPLOY.md)** - Logic Apps deployment
+
+### What's New in Version 2.0?
+See [README_ENTERPRISE.md](README_ENTERPRISE.md#-recent-enhancements-12-step-improvement-plan) for details on:
+1. Extended domain models (Customer, OrderLine, OrderStatus)
+2. Repository pattern implementation
+3. Service Bus ingestion pipeline
+4. Error handling & dead-letter queues
+5. FluentValidation framework
+6. Production-ready configuration
+7. Infrastructure as Code (Bicep)
+8. Comprehensive test suites
+9. Security hardening procedures
 
 ---
 
