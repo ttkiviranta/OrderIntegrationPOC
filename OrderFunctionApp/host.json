@@ -13,7 +13,19 @@
     "extensions": {
         "queues": {
             "maxPollingIntervalMs": 1000,
-            "visibilityTimeout": "00:00:30"
+            "visibilityTimeout": "00:00:30",
+            "maxDequeueCount": 3
+        },
+        "serviceBus": {
+            "maxConcurrentCalls": 16,
+            "maxConcurrentCallsPerItem": 1,
+            "autoCompleteMessages": true,
+            "prefetchCount": 0,
+            "processContinuationAsync": true,
+            "sessionIdleTimeout": "00:01:00"
         }
+    },
+    "functionHost": {
+        "corsOrigins": []
     }
 }

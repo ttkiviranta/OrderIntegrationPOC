@@ -8,13 +8,37 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrderFunctionApp.Data;
+using OrderFunctionApp.Data.Repositories;
 using OrderFunctionApp.Functions;
+using OrderFunctionApp.Models.Mappings;
+using OrderFunctionApp.Services;
+using OrderFunctionApp.Validation;
+using Azure.Identity;
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
 // Load configuration from local.settings.json and environment variables
 builder.Configuration.AddJsonFile("local.settings.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
+
+// Configure Key Vault for production environments
+// This loads additional configuration from Azure Key Vault when deployed
+var keyVaultUrl = builder.Configuration["KeyVaultUrl"];
+if (!string.IsNullOrEmpty(keyVaultUrl))
+{
+    try
+    {
+        builder.Configuration.AddAzureKeyVault(
+            new Uri(keyVaultUrl),
+            new DefaultAzureCredential());
+    }
+    catch (Exception ex)
+    {
+        var logger = LoggerFactory.Create(c => c.AddConsole()).CreateLogger("Program");
+        logger.LogWarning(ex, "Failed to load configuration from Key Vault: {Message}. Continuing with local configuration.", ex.Message);
+    }
+}
 
 // Configure Functions Web Application
 builder.ConfigureFunctionsWebApplication();
@@ -50,12 +74,24 @@ builder.Services.AddDbContextFactory<OrderIntegrationContext>(options =>
     });
 });
 
-
-// Register OrderProcessor for dependency injection
+// Register existing Function services
 builder.Services.AddScoped<OrderProcessor>();
-
-// Register ProcessOrderToSql for dependency injection
 builder.Services.AddScoped<ProcessOrderToSql>();
+
+// Register new Function services
+builder.Services.AddScoped<ServiceBusOrderIngestion>();
+
+// Register Repository pattern implementations
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
+builder.Services.AddScoped<IOrderLineRepository, OrderLineRepository>();
+
+// Register AutoMapper for DTO mapping
+builder.Services.AddAutoMapper(typeof(Program).Assembly);
+
+// Register service utilities
+builder.Services.AddScoped<RetryPolicy>();
+builder.Services.AddScoped<PoisonMessageHandler>();
 
 // Configure logging
 builder.Services.AddLogging(configure =>
